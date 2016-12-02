@@ -1,0 +1,63 @@
+---
+resources:
+- name: release
+  type: s3
+  source:
+    bucket: {{bucket-demo}}
+    regexp: meetup-(.*).txt
+    access_key_id: {{access_key_id}}
+    secret_access_key: {{secret_access_key}}
+    endpoint: http://10.244.0.4:9000
+
+
+
+jobs:
+- name: upload-to-minio
+  serial: true
+  plan:
+  - task: touch-file
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: getourneau/alpine-bash-git
+      outputs:
+      - name: my-file-to-upload
+      run:
+        path: bash
+        args:
+        - -c 
+        - | 
+          echo "Concourse Meetup #4 $(date +%Y%m%d%H%M%S)" >> my-file-to-upload/meetup-$(date +%Y%m%d%H%M%S).txt
+          cat  my-file-to-upload/meetup*.txt
+  - put: release
+    params: 
+      file: my-file-to-upload/meetup-*.txt
+
+- name: Retrieve-file-from-minio
+  serial: true
+  plan:
+  - get: release
+    trigger: true
+    passed: [upload-to-minio]
+  - task: read-file
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: getourneau/alpine-bash-git
+      inputs:
+      - name: release
+      run:
+        path: bash
+        args:
+        - -c 
+        - | 
+         cat release/meetup-$(cat release/version).txt
+
+
+
+
+        
